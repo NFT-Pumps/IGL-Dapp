@@ -31,6 +31,7 @@ export default function NFTWalletBridge(e) {
     const [whiteListPass, setWhiteListPass] = useState({});
     const [isPrivateMintIsOpen, setIsPrivateMintIsOpen] = useState(false);
     const [isPublicMintIsOpen, setIsPublicMintIsOpen] = useState(false);
+    const [isBogoMintIsOpen, setIsBogoMintIsOpen] = useState(false);
     const [walletBalance, setWalletBalance] = useState(0);
     const [txs, setTxs] = useState(hashArray);
     const [loaded, setLoaded] = useState(true);
@@ -73,27 +74,27 @@ export default function NFTWalletBridge(e) {
     }
 
     async function getBlockChainData(props) {
-        console.log("Step 1");
         let totalShares = await contract.methods.totalSupply.call();
-        console.log("Step 2");
         let resultTS = await totalShares.call();
         //console.log(`totalShares: ${resultTS}`)
-        console.log("Step 3");
         setnumMinted(resultTS);
 
         let balance2 = await GetBalance();
 
-        //await getRevealed();
+        await getRevealed();
         await getPublicMintStatus();
-        //await getPrivateMintStatus();
+        await getPrivateMintStatus();
+        await getBogoMintStatus();
         await getBalanceOf({ wallet: connectedWalletAddress });
 
         balance2 = web3.utils.fromWei(balance2, "ether");
         const filtered = connectedWalletAddress.substr(0, 6) + "..." + connectedWalletAddress.substr(connectedWalletAddress.length - 6);
 
+        let isThisAddressOnWhitelist = await CheckIfOnWhitelist(props.mintType, connectedWalletAddress);
+
         setTokenBalance({
             trueBalance: balance2, theBalance: balance2, connectedWalletAddress: connectedWalletAddress, filteredAddress: filtered,
-            isWhiteListed: false
+            isWhiteListed: isThisAddressOnWhitelist
         });
     }
 
@@ -245,7 +246,105 @@ export default function NFTWalletBridge(e) {
 
         if (props.mintType == "Public") {
             let txTransfer = await contract.methods
-                .openMint(props.mint)
+                .openMonsterMint(props.mint)
+                .send({ from: connectedWalletAddress, value: bntokens })
+                .on('transactionHash', function (hash) {
+                    //hashArray = [];
+
+                    hashArray.push({ id: 1, txHash: hash, filteredTxHash: hash.substr(0, 10) + "..." + hash.substr(hash.length - 10) });
+                    setTxs(hashArray);
+                    sethashTx(GetHashes(txs));
+                    //console.log(hash);
+                })
+                .then(function (result) {
+                    setIsWaiting(false);
+                    //alert('Transaction success');
+                    getBlockChainData(props);
+                }).catch(function (e) {
+                    setIsWaiting(false);
+                    setErrorMessage(e.message);
+                    console.log(e);
+                    getBlockChainData(props);
+                });
+        }
+
+        let isThisAddressOnWhitelist = await CheckIfOnWhitelist(props.mintType, connectedWalletAddress)
+        if (props.mintType == "Pre-Sale" && isThisAddressOnWhitelist) {
+
+            let thisWL = Whitelist();
+
+            let txTransfer1 = await contract.methods
+                .afterHoursMonsterMint(props.mint, thisWL[connectedWalletAddress].q, thisWL[connectedWalletAddress].monsterPass)
+                .send({ from: connectedWalletAddress, value: bntokens })
+                .on('transactionHash', function (hash) {
+                    //hashArray = [];
+
+                    hashArray.push({ id: 1, txHash: hash, filteredTxHash: hash.substr(0, 10) + "..." + hash.substr(hash.length - 10) });
+                    setTxs(hashArray);
+                    sethashTx(GetHashes(txs));
+                    //console.log(hash);
+                })
+                .then(function (result) {
+                    setIsWaiting(false);
+                    getBlockChainData(props);
+                    //alert('Transaction success');
+                }).catch(function (e) {
+                    setIsWaiting(false);
+                    setErrorMessage(e.message);
+                    console.log(e);
+                    getBlockChainData(props);
+                });
+        }
+
+
+        // let txTransfer = await contract.methods.mint1(Amount).estimateGas()
+        // .then(function (estimate) {
+        //   console.log("Estimated gas to execute mint: ", estimate);
+        // });
+
+        //let txTransfer = await contract.methods.mint1(Amount).call();
+        //let txTransfer2 = txTransfer.estimateGas({from: connectedWalletAddress});
+        //console.log(txTransfer);
+        return {};
+    }
+
+    async function bogoMint(props) {
+
+        if (process.env.debug) {
+            console.log(props);
+        }
+
+        let ethValue = 0;
+
+        if (props.mintType == "Public") {
+            ethValue = +process.env.ethValue;
+        }
+        else {
+            ethValue = +process.env.ethWLValue;
+        }
+        const TotalTokens = Math.round((ethValue * props.mint) * 10000) / 10000
+
+        let currentGasPrice = await web3.eth.getGasPrice()
+
+        if (process.env.debug) {
+            console.log(`currentGasPrice: ${currentGasPrice}`)
+        }
+
+        let gas_price = process.env.defaultGas;//Web3.fromWei(currentGasPrice, 'gwei') 
+
+        if (process.env.debug) {
+            console.log(`gas_price: ${gas_price}`)
+        }
+
+        var tokens = web3.utils.toWei(TotalTokens.toString(), 'ether')
+        var bntokens = web3.utils.toBN(tokens)
+        contract = new web3.eth.Contract(contractABI, tokenAddress, { from: connectedWalletAddress, gas: process.env.defaultGas * props.mint });
+        setIsWaiting(true)
+        setErrorMessage("");
+
+        if (props.mintType == "Public" && process.env.enableBogo == true) {
+            let txTransfer = await contract.methods
+                .bogoMint(props.mint)
                 .send({ from: connectedWalletAddress, value: bntokens })
                 .on('transactionHash', function (hash) {
                     //hashArray = [];
@@ -314,6 +413,50 @@ export default function NFTWalletBridge(e) {
         return {};
     }
 
+    async function togglePresaleMint() {
+
+        if (process.env.debug) {
+            console.log(Amount);
+        }
+
+        //const TotalTokens = 0.075 * Amount;
+
+        contract = new web3.eth.Contract(contractABI, tokenAddress, { from: connectedWalletAddress, gas: 50000 });
+        setIsWaiting(true)
+        setErrorMessage("");
+
+        // const estimation = await erc20.contract.methods.togglePresaleMint();
+
+        // console.log(estimation);
+        try {
+            let txTransfer = await contract.methods
+                .togglePresaleMint()
+                .send({ from: connectedWalletAddress })
+                .on('transactionHash', function (hash) {
+                    //hashArray = [];
+
+                    hashArray.push({ id: 1, txHash: hash, filteredTxHash: hash.substr(0, 10) + "..." + hash.substr(hash.length - 10) });
+                    setTxs(hashArray);
+                    sethashTx(GetHashes(txs));
+                    //console.log(hash);
+                })
+                .then(function (result) {
+                    setIsWaiting(false);
+                    alert('Transaction success');
+                }).catch(function (e) {
+                    alert('Transaction Failed');
+                    setIsWaiting(false)
+                    setErrorMessage(e.message)
+                    console.log(e)
+                });
+        } catch (error) {
+
+        }
+
+
+        return {};
+    }
+
     async function setRevealed(props) {
 
         if (process.env.debug) {
@@ -373,6 +516,26 @@ export default function NFTWalletBridge(e) {
 
         let thisResult = await contract.methods.publicMintIsOpen().call();
         setIsPublicMintIsOpen(thisResult);
+
+        return thisResult;
+    }
+
+    async function getBogoMintStatus() {
+
+        contract = new web3.eth.Contract(contractABI, tokenAddress, { from: connectedWalletAddress, gas: 50000 });
+
+        let thisResult = await contract.methods.bogoMintIsOpen().call();
+        setIsBogoMintIsOpen(thisResult);
+
+        return thisResult;
+    }
+
+    async function getPrivateMintStatus() {
+
+        contract = new web3.eth.Contract(contractABI, tokenAddress, { from: connectedWalletAddress, gas: 50000 });
+
+        let thisResult = await contract.methods.privateMintIsOpen().call();
+        setIsPrivateMintIsOpen(thisResult);
 
         return thisResult;
     }
@@ -443,6 +606,8 @@ export default function NFTWalletBridge(e) {
                 setIsRevealed,
                 isPublicMintIsOpen,
                 setIsPublicMintIsOpen,
+                isBogoMintIsOpen, 
+                setIsBogoMintIsOpen,
                 isPrivateMintIsOpen,
                 setIsPrivateMintIsOpen,
                 walletBalance,
@@ -453,12 +618,20 @@ export default function NFTWalletBridge(e) {
             }
         },
         sendMint: function (props) {
-            const thisP = props;
             sendMint(props)
+            return false;
+        },
+        bogoMint: function (props) {            
+            bogoMint(props)
             return false;
         },
         togglePublicMint: function (props) {
             togglePublicMint(props)
+
+            return false;
+        },
+        togglePresaleMint: function (props) {
+            togglePresaleMint(props)
 
             return false;
         },

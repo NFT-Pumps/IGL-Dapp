@@ -1,5 +1,4 @@
 module.exports = {
-  module.exports = {
     //reactStrictMode: false,
     //generateEtags: false,
     reactStrictMode: false,
@@ -9,11 +8,11 @@ module.exports = {
       contractAddress: "0xC81e9A17a5BAEE1141BA2AC7EEFDbe8f450b60e8",
       infuraID: "045e9c65387a4200aa8559c347fa19a4",
       defaultGas: 125000,//75000,
-      mintType : "Pre-Sale", //Pre-Sale Public
-      enableBogo : true,
-      enforceWhitelist : true,
-      ethValue : "0.44",
-      ethWLValue : "0.0",
+      mintType: "Pre-Sale", //Pre-Sale Public
+      enableBogo: true,
+      enforceWhitelist: true,
+      ethValue: "0.44",
+      ethWLValue: "0.0",
       debug: false,
       network: 'mainnet',
       chainId: 1,
@@ -22,10 +21,10 @@ module.exports = {
       www: 'https://www.iglnft.app',
       mainWWW: 'https://www.iglnft.app',
       title: 'IGL NFT',
-      links : {
-        opensea : "https://opensea.io/collection/igl-genesis-nft",
-        discord : "https://discord.gg/Egw5QN9hZQ",
-        twitter : "https://twitter.com/iglnft"
+      links: {
+        opensea: "https://opensea.io/collection/igl-genesis-nft",
+        discord: "https://discord.gg/Egw5QN9hZQ",
+        twitter: "https://twitter.com/iglnft"
       },
       maxMint: 8000,
       maxMintCount: 50,
